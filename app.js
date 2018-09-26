@@ -1,41 +1,40 @@
-const Koa = require('koa')
-require('babel-register');
-const fs = require('fs')
-var render = require('koa-ejs');
-const Router = require('koa-router')
-const path = require('path')
-const page = require('./router/page.js')
-const app = new Koa()
-const home = new Router()
+var app = require('koa')()
+  , logger = require('koa-logger')
+  , json = require('koa-json')
+  , views = require('koa-views')
+  , onerror = require('koa-onerror');
 
+var index = require('./routes/index');
+var users = require('./routes/users');
 
-render(app, {
-  root: path.join(__dirname, 'view'),
-  layout: '',
-  viewExt: 'html',
-  cache: false,
-  debug: true
+// error handler
+onerror(app);
+
+// global middlewares
+app.use(views('views', {
+  root: __dirname + '/views',
+  default: 'ejs'
+}));
+app.use(require('koa-bodyparser')());
+app.use(json());
+app.use(logger());
+
+app.use(function *(next){
+  var start = new Date;
+  yield next;
+  var ms = new Date - start;
+  console.log('%s %s - %s', this.method, this.url, ms);
 });
 
-// 子路由1
-home.get('/', async ( ctx )=>{
-  let html = `
-    <ul>
-      <li><a href="/page/helloworld">/page/helloworld</a></li>
-      <li><a href="/page/404">/page/404</a></li>
-    </ul>
-  `
-  ctx.body = html
-})
+app.use(require('koa-static')(__dirname + '/public'));
 
-// 装载所有子路由
-let router = new Router()
-router.use('/', home.routes(), home.allowedMethods())
-router.use('/page', page.routes(), page.allowedMethods())
+// routes definition
+app.use(index.routes(), index.allowedMethods());
+app.use(users.routes(), users.allowedMethods());
 
-// 加载路由中间件
-app.use(router.routes()).use(router.allowedMethods())
+// error-handling
+app.on('error', (err, ctx) => {
+  console.error('server error', err, ctx)
+});
 
-app.listen(3000, () => {
-  console.log('[demo] route-use-middleware is starting at port 3000')
-})
+module.exports = app;
